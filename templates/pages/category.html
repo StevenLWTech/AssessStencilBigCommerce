@@ -4,7 +4,10 @@ category:
     products:
         limit: {{theme_settings.categorypage_products_per_page}}
 ---
+{{inject "categoryProducts"  category.products}}
+{{inject "thisCategory"  category}}
 {{inject "categoryProductsPerPage" theme_settings.categorypage_products_per_page}}
+{{inject "categoryId" category.id}}
 {{#partial "head"}}
     {{#if pagination.category.previous}}
         <link rel="prev" href="{{pagination.category.previous}}">
@@ -15,6 +18,16 @@ category:
 {{/partial}}
 
 {{#partial "page"}}
+
+<div style="display: flex;">
+    <button class="button addAllToCart" type="button" data-product-list='[{{#each category.products}}{{this.id}}{{#unless @last}},{{/unless}}{{/each}}]'>
+        Add all items to Cart
+    </button>
+
+    <button class="button data-delete-cart" hidden>
+        Remove All Items
+    </button>
+</div>
 
 {{> components/common/breadcrumbs breadcrumbs=breadcrumbs}}
 {{#if category.image}}
@@ -30,6 +43,7 @@ category:
     {{{region name="category_below_header"}}}
 {{/unless}}
 {{{category.description}}}
+
 <div class="page">
     {{#if category.faceted_search_enabled}}
         <aside class="page-sidebar" id="faceted-search-container">
@@ -46,7 +60,7 @@ category:
             </aside>
         {{/if}}
     {{/if}}
-
+    
     <div class="page-content" id="product-listing-container">
         {{> components/category/product-listing}}
         {{{region name="category_below_content"}}}
