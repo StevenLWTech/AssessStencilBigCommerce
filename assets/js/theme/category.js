@@ -8,6 +8,11 @@ import {
     createTranslationDictionary
 } from '../theme/common/utils/translations-utils';
 
+function setImageSource(e, attributeName) {
+    const card = $(e.currentTarget).find(".card-image");
+    const image = card.attr(attributeName);
+    card.attr("srcset", image);
+}
 export default class Category extends CatalogPage {
     constructor(context) {
         super(context);
@@ -30,17 +35,16 @@ export default class Category extends CatalogPage {
 
         $('a.navList-action').on('click', () => this.setLiveRegionAttributes($('span.price-filter-message'), 'status', 'assertive'));
     }
+
+
     onMouseEnter(e) {
-        const card = $(e.currentTarget).find(".card-image");
-        const image = card.attr("data-hover-image");
-        card.attr("srcset", image);
+        setImageSource(e, "data-hover-image");
     }
 
     onMouseLeave(e) {
-        const card = $(e.currentTarget).find(".card-image");
-        const image = card.attr("data-src");
-        card.attr("srcset", image);
+        setImageSource(e, "data-src");
     }
+
 
     onReady() {
         this.arrangeFocusOnSortBy();
