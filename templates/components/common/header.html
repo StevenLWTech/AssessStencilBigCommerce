@@ -2,7 +2,8 @@
 {{#if banners.top}}
 <div class="banners" data-banner-location="top">
     {{#each (limit banners.top_metadata 1)}}
-    <div class="banner" data-event-type="promotion" data-entity-id="{{this.id}}" data-name="{{this.banner-name}}" data-position="{{this.location}}" data-banner-id="{{this.banner-name}}">
+    <div class="banner" data-event-type="promotion" data-entity-id="{{this.id}}" data-name="{{this.banner-name}}"
+        data-position="{{this.location}}" data-banner-id="{{this.banner-name}}">
         <div data-event-type="promotion-click">
             {{{this.content}}}
         </div>
@@ -15,15 +16,29 @@
         <span class="mobileMenu-toggleIcon">Toggle menu</span>
     </a>
     {{> components/common/navigation}}
-
+    {{#if customer}}
+    <div class="account-information-container" style=" display: flex;
+    align-items: center;
+    justify-content: center;" >
+        <span class=navPages-action>
+            Name: {{customer.name}}
+        </span>
+        <span class=navPages-action>
+            Email: {{customer.email}}
+        </span>
+        <span class=navPages-action>
+            Phone: {{customer.phone}}
+        </span>
+    </div>
+    {{/if}}
     {{#if page_type '===' 'default'}}
-        <h1 class="header-logo header-logo--{{theme_settings.logo-position}}">
-            {{> components/common/store-logo}}
-        </h1>
+    <h1 class="header-logo header-logo--{{theme_settings.logo-position}}">
+        {{> components/common/store-logo}}
+    </h1>
     {{else}}
-        <div class="header-logo header-logo--{{theme_settings.logo-position}}">
-            {{> components/common/store-logo}}
-        </div>
+    <div class="header-logo header-logo--{{theme_settings.logo-position}}">
+        {{> components/common/store-logo}}
+    </div>
     {{/if}}
     <div class="navPages-container" id="menu" data-menu>
         {{> components/common/navigation-menu}}
