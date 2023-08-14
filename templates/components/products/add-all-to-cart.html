@@ -1,0 +1,17 @@
+    <div style="display: flex; justify-content: space-evenly;">
+        <div>
+            <form class="form" method="post" data-cart-item-add>
+                <button class="button button--primary" data-button-type="add-all"
+                    data-product-list='[{{#each category.products}}"{{this.id}}"{{#unless @last}},{{/unless}}{{/each}}]'>
+                    {{lang 'products.add_all_to_cart'}}
+                </button>
+            </form>
+        </div>
+        <div>
+            <form class="form" method="post" data-cart-item-remove>
+                <button class="button" style="background-color: rgb(112, 17, 0); color: white;" data-button-type="remove-all">
+                    {{lang 'products.remove_all_from_cart'}}
+                </button>
+            </form>
+        </div>
+    </div>

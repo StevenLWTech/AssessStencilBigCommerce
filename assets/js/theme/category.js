@@ -4,13 +4,22 @@ import {
 import CatalogPage from './catalog';
 import compareProducts from './global/compare-products';
 import FacetedSearch from './common/faceted-search';
+import utils from '@bigcommerce/stencil-utils';
 import {
     createTranslationDictionary
 } from '../theme/common/utils/translations-utils';
 import {
-    showAlertModal
+    showAlertModal, defaultModal
 } from './global/modal';
+
 const CARTS_ENDPOINT = "/api/storefront/carts/";
+const ADDED_TO_CART = "Product(s) added to cart";
+
+function getHeaders() {
+    return {
+        'Content-Type': 'application/json',
+    };
+}
 
 function setImageSource(e, attributeName) {
     const card = $(e.currentTarget).find(".card-image");
@@ -21,91 +30,98 @@ function setImageSource(e, attributeName) {
 function fetchCart(route) {
     return fetch(route, {
             method: "GET",
-            credentials: "same-origin",
+            credentials: "same-origin"
         })
-        .then((response) => response.json())
-        .catch((error) => console.error(error));
+        .then(response => response.json())
+        .catch(error => console.error(error));
 }
 
-function updateCartDisplay(length) {
-    var elements = document.getElementsByClassName('data-delete-cart');
-
-    if (elements.length > 0) { 
-        var element = elements[0]; 
-        if (length > 0) {
-            element.style.display = "block";
-        } else {
-            element.style.display = "none";
-        }
-    } else {
-        console.error('Elements with class "data-delete-cart" not found');
-    }
+function checkCart() {
+    fetchCart(CARTS_ENDPOINT)
+        .then((result) => {
+           
+            if (result.length > 0) {
+                $('[data-button-type="remove-all"]').css("display", "block");
+            } else {
+                $('[data-button-type="remove-all"]').css("display", "none");
+            }
+        })
+        .catch(error => console.error(error));
 }
 
+// Update cart with new line items handling case where product has
+async function updateCart(cart, lineItems) {
+    let cartQuantity = 0;
+    // account for all types of items
+    const allItems = [...cart.lineItems.physicalItems, ...cart.lineItems.digitalItems, ...cart.lineItems.customItems, ...cart.lineItems.giftCertificates];
 
-function getCart(route) {
-    return fetchCart(route).then((result) => {
-        var length = result.length;
-        updateCartDisplay(length);
-        return result;
+    // Calculate cart quantity, for the sake of not making another request we add +1 here. If the quantity is wrong, it will be corrected on the next page load
+    allItems.forEach(item => {
+        cartQuantity += item.quantity + 1;
     });
+
+    const options = {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({  
+            lineItems,
+            "locale": "en"
+        })
+    };
+
+    await fetch(CARTS_ENDPOINT + cart.id + '/items', options)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to update cart');
+        })
+        .then(response => utils.hooks.emit('cart-item-add', response));
+
+    $('body').trigger('cart-quantity-update', cartQuantity);
+    $('[data-button-type="remove-all"]').css("display", "block");
+
+showAlertModal(ADDED_TO_CART, {
+    icon: '',
+});
+
 }
 
-function deleteCart() {
-    var string = "Are you sure you want to delete your cart?"
-    showAlertModal(string, {
-        icon: 'warning',
-        showCancelButton: true,
-        onConfirm: () => {
+function createCart(lineItems) {
+    const createCartQuantity = lineItems.length;
+    const options = {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+            lineItems
+        })
+    };
 
-            return fetchCart(CARTS_ENDPOINT)
-                .then((result) => {
-                    // Assuming the cart ID is in the first item in the result array
-                    const cartId = result[0].id;
-
-
-                    // Making the delete request with the cartId
-                    return fetch(CARTS_ENDPOINT + cartId, {
-                            method: "DELETE",
-                            credentials: "same-origin",
-                        })
-                        .then(response => {
-                            if (response.ok) {
-                                updateCartDisplay(0);
-                                return;
-                            } else {
-                                throw new Error('Failed to delete cart');
-                            }
-                        })
-                })
-                .catch(error => console.error(error));
-        },
-    });
+    fetch(CARTS_ENDPOINT, options)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to create cart');
+            return response.json();
+        })
+        .then(response => utils.hooks.emit('cart-item-add', response));
+    $('[data-button-type="remove-all"]').css("display", "block");
+    $('body').trigger('cart-quantity-update', createCartQuantity);
+    showAlertModal(ADDED_TO_CART, {
+    icon: '',
+});
 }
 
-function addAllProductsToCart(productIds) {
-    function addToCart(productId) {
-        return $.get("/cart.php?action=add&product_id=" + productId)
-            .done(function (data) {
-                updateCartDisplay(data.length);
-            })
-            .fail(function (xhr, status, error) {
-                throw new Error('Failed to add product ' + productId + ' to the cart: ' + error);
-            });
-    }
-
-    // Chain the promises to add each product to the cart in sequence
-    return productIds.reduce(function (promise, id) {
-        return promise.then(function () {
-            return addToCart(id);
-        });
-    }, Promise.resolve());
-}
 
 export default class Category extends CatalogPage {
     constructor(context) {
         super(context);
         this.validationDictionary = createTranslationDictionary(context);
+    }
+
+    bindEvents() {
+        $(".card-figure").on({
+            mouseenter: this.onMouseEnter.bind(this),
+            mouseleave: this.onMouseLeave.bind(this)
+        });
+        $('[data-button-type="add-all"]').on("click", this.addAllToCart.bind(this));
+        $('[data-button-type="remove-all"]').on("click", this.deleteCart.bind(this));
+        
     }
 
     setLiveRegionAttributes($element, roleType, ariaLiveStatus) {
@@ -121,31 +137,77 @@ export default class Category extends CatalogPage {
         if ($('.navList-action').hasClass('is-active')) {
             $('a.navList-action.is-active').focus();
         }
-
         $('a.navList-action').on('click', () => this.setLiveRegionAttributes($('span.price-filter-message'), 'status', 'assertive'));
     }
-
 
     onMouseEnter(e) {
         setImageSource(e, "data-hover-image");
     }
-
     onMouseLeave(e) {
         setImageSource(e, "data-src");
     }
 
 
+    async addAllToCart(event) {
+        event.preventDefault();
+        try {
+            // Fetch cart
+            const cart = await fetch(CARTS_ENDPOINT).then(response => response.json());
+
+            // Filter products without options and map them to lineItems
+            // Handling case where a product has options a better way would be to prompt the user to select the options
+            const lineItems = this.context.categoryProducts
+                .filter(product => !product.has_options)
+                .map(product => ({
+                    productId: product.id,
+                    quantity: product.qty_in_cart + 1
+                }));
+
+            // Check if there is an existing cart or a new one needs to be created
+            if (cart.length > 0) {
+                await updateCart(cart[0], lineItems);
+                
+            } else {
+                await createCart(lineItems);
+                
+            }
+        } catch (err) {
+            console.error("error", err);
+        }
+    }
+
+    deleteCart(event) {
+        event.preventDefault();
+        var string = "Are you sure you want to delete your cart?";
+        return showAlertModal(string, { // Make sure to return the entire chain
+            icon: 'warning',
+            showCancelButton: true,
+            onConfirm: () => {
+                return fetchCart(CARTS_ENDPOINT)
+                    .then((result) => {
+                        const cartId = result[0].id;
+                        return fetch(CARTS_ENDPOINT + cartId, {
+                                method: "DELETE",
+                                credentials: "same-origin",
+                            })
+                            .then(response => {
+                                utils.hooks.emit('cart-item-remove', response)
+                                if (response.ok) {
+                                    $('[data-button-type="remove-all"]').css("display", "none");
+                                    $('body').trigger('cart-quantity-update', 0); // Triggering the event directly
+
+                                } else {
+                                    return showAlertModal(response.data.errors.join('\n'));
+                                }
+                            })
+                    })
+                    .catch(error => console.error(error));
+            },
+        });
+    }
+
     onReady() {
         this.arrangeFocusOnSortBy();
-        getCart(CARTS_ENDPOINT);
-
-        $('.data-delete-cart').on('click', () => {
-
-            deleteCart();
-        });
-
-        $('[data-button-type="add-cart"]').on('click', (e) => this.setLiveRegionAttributes($(e.currentTarget).next(), 'status', 'polite'));
-
         this.makeShopByPriceFilterAccessible();
 
         compareProducts(this.context);
@@ -159,110 +221,11 @@ export default class Category extends CatalogPage {
 
         $('a.reset-btn').on('click', () => this.setLiveRegionsAttributes($('span.reset-message'), 'status', 'polite'));
 
-        $(".card-figure").on({
-            mouseenter: this.onMouseEnter.bind(this),
-            mouseleave: this.onMouseLeave.bind(this)
-        });
 
-        $(".addAllToCart").on("click", function () {
-         
-            var productIdsString = $(this).attr("data-product-list");
-            var productIds = JSON.parse(productIdsString);
-
-            addAllProductsToCart(productIds)
-                .then(function () {
-                    showAlertModal('All items have been added to the cart.', {
-                        icon: 'success'
-                    });
-                })
-                .catch(function (error) {
-                    showAlertModal('An error occurred: ' + error.message, {
-                        icon: 'error'
-                    });
-                    console.error(error);
-                });
-        });
-
-
-
-
-        // $(".addAllToCart").on("click", function () {
-        //     var product_ids_string = $(this).attr("data-product-list");
-        //     var product_ids = JSON.parse(product_ids_string); // Parse the JSON string into an array
-
-        //     // Map the product IDs into an array of line items
-        //     var lineItems = product_ids.map(function (id) {
-        //         return {
-        //             quantity: 1,
-        //             productId: id
-        //         };
-        //     });
-
-
-        //     getCart('/api/storefront/carts?include=lineItems.digitalItems.options,lineItems.physicalItems.options')
-        //         .then(data => {
-        //             if (data.length === 0) {
-        //                 createCart('/api/storefront/carts', {
-        //                         lineItems
-        //                     })
-        //                     .then(newCartData => {
-        //                         addItemsToCart(newCartData.id);
-        //                     })
-        //                     .catch(error => {
-        //                         console.error("An error occurred when creating the cart:", error);
-        //                     });
-        //             } else {
-        //                 addItemsToCart(data[0].id);
-        //             }
-        //         });
-
-        //     function addItemsToCart(cartId) {
-        //         addCartItem('/api/storefront/carts/', cartId, {
-        //                 lineItems
-        //             }) // Wrap lineItems inside an object
-        //             .then(response => response.json()
-        //                 .then(result => console.log("success"))
-        //                 .catch(error => {
-        //                     console.error("An error occurred:", error);
-        //                 }))
-        //             .catch(error => {
-        //                 console.error("An error occurred:", error);
-        //             });
-        //     }
-        // });
-
+        this.bindEvents();
+        checkCart();
         this.ariaNotifyNoProducts();
     }
-    // createCart(route, cartItems) {
-    //     return fetch(route, {
-    //             method: "POST",
-    //             credentials: "same-origin",
-    //             headers: {
-    //                 "Content-Type": "application/json"
-    //             },
-    //             body: JSON.stringify(cartItems),
-    //         })
-    //         .then(response => response.json())
-    //         .then(result => console.log(result))
-    //         .catch(error => console.error(error));
-    // };
-
-
-
-    // addCartItem(routeStart, cartId, cartItems) {
-    //     var route = routeStart + cartId + '/items';
-    //     return fetch(route, {
-    //             method: "POST",
-    //             credentials: "same-origin",
-    //             headers: {
-    //                 "Content-Type": "application/json"
-    //             },
-    //             body: JSON.stringify(cartItems),
-    //         })
-    //         .then(response => response.json())
-    //         .then(result => console.log(result))
-    //         .catch(error => console.error(error));
-    // };
 
     ariaNotifyNoProducts() {
         const $noProductsMessage = $('[data-no-products-notification]');

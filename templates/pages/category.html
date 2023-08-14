@@ -19,16 +19,6 @@ category:
 
 {{#partial "page"}}
 
-<div style="display: flex;">
-    <button class="button addAllToCart" type="button" data-product-list='[{{#each category.products}}{{this.id}}{{#unless @last}},{{/unless}}{{/each}}]'>
-        Add all items to Cart
-    </button>
-
-    <button class="button data-delete-cart" hidden>
-        Remove All Items
-    </button>
-</div>
-
 {{> components/common/breadcrumbs breadcrumbs=breadcrumbs}}
 {{#if category.image}}
     {{> components/common/responsive-img
